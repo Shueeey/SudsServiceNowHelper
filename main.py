@@ -1,14 +1,11 @@
 import platform
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QComboBox, QLineEdit, QListWidget, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QComboBox, QLineEdit, QListWidget
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import QTimer, Qt
-
-
 import openpyxl
 from datetime import datetime
 import time
-import getpass
 from bs4 import BeautifulSoup
 
 
@@ -61,36 +58,6 @@ def open_url(url):
 
     else:
         print("Unsupported operating system.")
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
-
-class LoginDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Login")
-        self.username = QLineEdit(self)
-        self.password = QLineEdit(self)
-        self.password.setEchoMode(QLineEdit.Password)
-        self.login_button = QPushButton('Login', self)
-        self.login_button.clicked.connect(self.handle_login)
-        self.username_label = QLabel('Username:')
-        self.password_label = QLabel('Password:')
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.username_label)
-        layout.addWidget(self.username)
-        layout.addWidget(self.password_label)
-        layout.addWidget(self.password)
-        layout.addWidget(self.login_button)
-        self.setLayout(layout)
-
-    def handle_login(self):
-        if self.username.text() and self.password.text():
-            self.accept()
-        else:
-            QMessageBox.warning(self, 'Error', 'Both fields are required')
-
-    def get_credentials(self):
-        return self.username.text(), self.password.text()
 
 class SnowSoftwareWindow(QWidget):
     def __init__(self):
@@ -215,68 +182,60 @@ class SnowSoftwareWindow(QWidget):
         self.sheet.append([date, unikey, counter_location, assistance_category, time_spent, notes])
         self.workbook.save("assistance_data.xlsx")
 
-    import getpass
-
     def open_task_list(self):
-        login_dialog = LoginDialog(self)
-        if login_dialog.exec_() == QDialog.Accepted:
-            username_input, password_input = login_dialog.get_credentials()
-            self.driver = webdriver.Chrome()
+        self.driver = webdriver.Chrome()
 
-            try:
-                # Navigate to the task list URL
-                self.driver.get(task_list_url)
+        try:
+            # Navigate to the task list URL
+            self.driver.get(task_list_url)
 
-                self.driver.implicitly_wait(2)
+            self.driver.implicitly_wait(2)
 
-                username = self.driver.find_element(By.ID, "input28")
-                username.send_keys(username_input)
+            username = self.driver.find_element(By.ID, "input28")
+            username.send_keys("spie2381")
 
-                self.driver.implicitly_wait(2)
-                password = self.driver.find_element(By.ID, "input36")
-                password.send_keys(password_input)
-                print("Credentials entered")
+            self.driver.implicitly_wait(2)
+            password = self.driver.find_element(By.ID, "input36")
+            password.send_keys("Cocksasin#2447")
+            print(password)
 
-                # Clicks the sign in button
-                self.driver.implicitly_wait(2)
+            # Clicks the sign in button
+            self.driver.implicitly_wait(2)
 
-                sign_in = self.driver.find_element(By.CLASS_NAME, "o-form-button-bar")
-                sign_in.click()
+            sign_in = self.driver.find_element(By.CLASS_NAME, "o-form-button-bar")
+            sign_in.click()
 
-                self.driver.implicitly_wait(2)
+            self.driver.implicitly_wait(2)
 
-                choose_push_nofif = self.driver.find_element(By.XPATH,
-                                                             '//*[@id="form61"]/div[2]/div/div[2]/div[2]/div[2]')
-                choose_push_nofif.click()
+            choose_push_nofif = self.driver.find_element(By.XPATH, '//*[@id="form61"]/div[2]/div/div[2]/div[2]/div[2]')
+            choose_push_nofif.click()
 
-                print(self.driver)
+            print(self.driver)
 
-                # Open additional URLs in new tabs
-                self.driver.execute_script("window.open('');")
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                self.driver.get("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
+            # Open additional URLs in new tabs
+            self.driver.execute_script("window.open('');")
+            self.driver.switch_to.window(self.driver.window_handles[-1])
+            self.driver.get("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
 
-                sign_into_papercut = self.driver.find_element(By.XPATH, '//*[@id="inputUsername"]')
-                sign_into_papercut.send_keys(username_input)
+            sign_into_papercut = self.driver.find_element(By.XPATH, '//*[@id="inputUsername"]')
+            sign_into_papercut.send_keys("spie2381")
 
-                sign_into_papercut1 = self.driver.find_element(By.XPATH, '//*[@id="inputPassword"]')
-                sign_into_papercut1.send_keys(password_input)
+            sign_into_papercut1 = self.driver.find_element(By.XPATH, '//*[@id="inputPassword"]')
+            sign_into_papercut1.send_keys("Cocksasin#2447")
 
-                sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
-                sign_into_papercut_btn.click()
+            sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
+            sign_into_papercut_btn.click()
 
-                self.driver.switch_to.window(self.driver.window_handles[0])
-                # Switch back to the original tab
-                time.sleep(10)
-                self.driver.execute_script("window.open('');")
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
-                self.driver.switch_to.window(self.driver.window_handles[0])
+            self.driver.switch_to.window(self.driver.window_handles[0])
+            # Switch back to the original tab
+            time.sleep(10)
+            self.driver.execute_script("window.open('');")
+            self.driver.switch_to.window(self.driver.window_handles[-1])
+            self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
+            self.driver.switch_to.window(self.driver.window_handles[0])
 
-            except Exception as e:
-                print("An error occurred while opening the task list:", str(e))
-        else:
-            print("Login cancelled")
+        except Exception as e:
+            print("An error occurred while opening the task list:", str(e))
 
     def filter_print_refund_tickets(self):
         try:
@@ -675,10 +634,10 @@ class SnowSoftwareWindow(QWidget):
                                                 print("Failed to find the search input in IGA")
 
                                             # Wait for 1 second
-                                            time.sleep(1)
+
 
                                             # Click the specified element
-                                            click_xpath = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div/div[1]/div[2]/div[3]/div[2]/div/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span'
+                                            click_xpath = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span'
                                             WebDriverWait(self.driver, 10).until(
                                                 EC.element_to_be_clickable((By.XPATH, click_xpath))
                                             )
