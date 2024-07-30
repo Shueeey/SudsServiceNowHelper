@@ -1,3 +1,0 @@
-([('main',
-   '/Users/shueeey/snow/SudsServiceNowHelper/dist/main',
-   'EXECUTABLE')],)
