@@ -185,57 +185,6 @@ class SnowSoftwareWindow(QWidget):
     def open_task_list(self):
         self.driver = webdriver.Chrome()
 
-        try:
-            # Navigate to the task list URL
-            self.driver.get(task_list_url)
-
-            self.driver.implicitly_wait(2)
-
-            username = self.driver.find_element(By.ID, "input28")
-
-
-            self.driver.implicitly_wait(2)
-            password = self.driver.find_element(By.ID, "input36")
-
-            print(password)
-
-            # Clicks the sign in button
-            self.driver.implicitly_wait(2)
-
-            sign_in = self.driver.find_element(By.CLASS_NAME, "o-form-button-bar")
-            sign_in.click()
-
-            self.driver.implicitly_wait(2)
-
-            choose_push_nofif = self.driver.find_element(By.XPATH, '//*[@id="form61"]/div[2]/div/div[2]/div[2]/div[2]')
-            choose_push_nofif.click()
-
-            print(self.driver)
-
-            # Open additional URLs in new tabs
-            self.driver.execute_script("window.open('');")
-            self.driver.switch_to.window(self.driver.window_handles[-1])
-            self.driver.get("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
-
-            sign_into_papercut = self.driver.find_element(By.XPATH, '//*[@id="inputUsername"]')
-
-
-            sign_into_papercut1 = self.driver.find_element(By.XPATH, '//*[@id="inputPassword"]')
-
-
-            sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
-            sign_into_papercut_btn.click()
-
-            self.driver.switch_to.window(self.driver.window_handles[0])
-            # Switch back to the original tab
-            time.sleep(10)
-            self.driver.execute_script("window.open('');")
-            self.driver.switch_to.window(self.driver.window_handles[-1])
-            self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
-            self.driver.switch_to.window(self.driver.window_handles[0])
-
-        except Exception as e:
-            print("An error occurred while opening the task list:", str(e))
 
     def filter_print_refund_tickets(self):
         try:
