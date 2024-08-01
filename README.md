@@ -6,3 +6,6 @@ v1.0 Beta Release Notes:
  - Sorted out refund issue - Uses Selenium to open and automate tasks and then Javascript to webscrape and put said information on a floating window to streamline refund process. Now multiple windows don't manually have to be opened to verify a refund, now all the information is present when the ticket is opened
  - Still needs a more elegant approach to logging into systems but works for now
  - Yet to implement MFA reset auto Ticket logging
+
+v1.1 Beta Release Notes:
+ - Added MFA reset auto Ticket logging but need to have browswer already open in debugger mode on port 9222 whilst logged into Service

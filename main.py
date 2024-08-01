@@ -1,16 +1,24 @@
 import platform
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QComboBox, QLineEdit, QListWidget, QDialog, QMessageBox
+import os
+
+import playwright
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QComboBox, QLineEdit, QListWidget, \
+    QDialog, QMessageBox, QInputDialog
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import QTimer, Qt
 import openpyxl
 from datetime import datetime
 import time
+from selenium.webdriver.support.ui import Select
+from playwright.sync_api import Playwright, sync_playwright, expect
+
 from bs4 import BeautifulSoup
 
 
 
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
@@ -139,6 +147,10 @@ class SnowSoftwareWindow(QWidget):
             "WiFi", "Other"
         ])
 
+        #Create an Okta Reset button
+        self.okta_resets_button = QPushButton("Okta Resets", self)
+        self.okta_resets_button.clicked.connect(self.run_okta_resets)
+
         # Create a list widget to display the ticket links
         self.ticket_list = QListWidget(self)
 
@@ -153,6 +165,7 @@ class SnowSoftwareWindow(QWidget):
         layout.addWidget(self.reset_button)
         layout.addWidget(self.task_list_button)
         layout.addWidget(self.refund_tickets_button)
+        layout.addWidget(self.okta_resets_button)
         layout.addWidget(self.ticket_list)
         self.setLayout(layout)
 
@@ -209,6 +222,81 @@ class SnowSoftwareWindow(QWidget):
         self.sheet.append([date, unikey, counter_location, assistance_category, time_spent, notes])
         self.workbook.save("assistance_data.xlsx")
 
+    def get_credentials(self):
+        username, ok1 = QInputDialog.getText(self, "Login", "Enter your username:")
+        if not ok1:
+            return None, None
+        password, ok2 = QInputDialog.getText(self, "Login", "Enter your password:", QLineEdit.Password)
+        if not ok2:
+            return None, None
+        return username, password
+
+
+    def run_okta_resets(self):
+
+        url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
+
+
+
+        # Wait for a moment to ensure the new tab is opened
+        with sync_playwright() as p:
+            def get_credentials():
+                username, ok1 = QInputDialog.getText(self, "Login", "Enter your username:")
+                if not ok1:
+                    return None, None
+                password, ok2 = QInputDialog.getText(self, "Login", "Enter your password:", QLineEdit.Password)
+                if not ok2:
+                    return None, None
+                return username, password
+            try:
+                print("does it even reach here?")
+                # Connect to the existing Chrome instance
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                # if "sso.sydney.edu.au" in browser.contexts[-1].pages[0].url:
+                #     username, password = get_credentials()
+                #     if username is None or password is None:
+                #         return
+                #
+                #     page.get_by_label("Username (UniKey)").fill(username)
+                #     page.get_by_label("Password").fill(password)
+                #     page.get_by_label("Password").press("Enter")
+                #
+                #     # Handle MFA
+                #     page.get_by_label("Select to get a push").click()
+                #     page.wait_for_url("https://sydneyuni.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do",
+                #                       timeout=60000)
+
+                # Get the active tab
+                page = browser.contexts[-1].pages[-1]
+                page.goto(url)
+
+                # Continue with the automation
+                frame = page.frame_locator("iframe[name=\"gsft_main\"]")
+
+                frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
+                    "Unikey/Okta Assistance")
+                frame.locator("select[name=\"IO\\:d68099e6db29c4509909abf34a961949\"]").select_option(
+                    "Factor Reset (new phone)")
+
+                frame.get_by_role("textbox", name="Additional details").fill(
+                    "Assisted with moving Okta MFA onto new phone")
+
+                print("Successfully interacted with all form elements")
+
+
+
+                QMessageBox.information(self, "Process Complete",
+                                        "The Okta reset process has been completed. You can now close the browser tab manually.")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
+            finally:
+                # Close the browser context, but the main Chrome window will remain open
+                for context in browser.contexts:
+                    context.close()
+                browser.close()
+
+        print("Okta reset process completed")
     def open_task_list(self):
         login_dialog = LoginDialog(self)
         if login_dialog.exec_() == QDialog.Accepted:
