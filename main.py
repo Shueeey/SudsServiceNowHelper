@@ -1,6 +1,9 @@
 import platform
 import sys
 import os
+import subprocess
+import appscript
+
 
 import playwright
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QComboBox, QLineEdit, QListWidget, \
@@ -231,45 +234,38 @@ class SnowSoftwareWindow(QWidget):
             return None, None
         return username, password
 
-
-    def run_okta_resets(self):
-
+    def start_chrome_debugging(self):
         url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
 
+        system = platform.system()
+        if system == "Windows":
+            cmd = f'start chrome.exe --remote-debugging-port=9222 "{url}"'
+            subprocess.Popen(cmd, shell=True)
+        elif system == "Darwin":  # macOS
+            cmd = f'/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug "{url}"'
+            appscript.app('Terminal').do_script(cmd)
+        else:
+            raise OSError("Unsupported operating system")
 
+        print("Started Chrome debugging instance with the specified URL")
 
-        # Wait for a moment to ensure the new tab is opened
+    def run_okta_resets(self):
+        url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
+
+        # Start Chrome with debugging and open the URL
+        self.start_chrome_debugging()
+
         with sync_playwright() as p:
-            def get_credentials():
-                username, ok1 = QInputDialog.getText(self, "Login", "Enter your username:")
-                if not ok1:
-                    return None, None
-                password, ok2 = QInputDialog.getText(self, "Login", "Enter your password:", QLineEdit.Password)
-                if not ok2:
-                    return None, None
-                return username, password
             try:
-                print("does it even reach here?")
                 # Connect to the existing Chrome instance
                 browser = p.chromium.connect_over_cdp("http://localhost:9222")
-                # if "sso.sydney.edu.au" in browser.contexts[-1].pages[0].url:
-                #     username, password = get_credentials()
-                #     if username is None or password is None:
-                #         return
-                #
-                #     page.get_by_label("Username (UniKey)").fill(username)
-                #     page.get_by_label("Password").fill(password)
-                #     page.get_by_label("Password").press("Enter")
-                #
-                #     # Handle MFA
-                #     page.get_by_label("Select to get a push").click()
-                #     page.wait_for_url("https://sydneyuni.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do",
-                #                       timeout=60000)
+                if browser:
+                    print("Connected to the existing Chrome instance")
 
-                # Get the active tab
+                # Get the most recently opened page (which should be our new tab)
                 page = browser.contexts[-1].pages[-1]
-                page.goto(url)
 
+                page.goto(url)
                 # Continue with the automation
                 frame = page.frame_locator("iframe[name=\"gsft_main\"]")
 
@@ -282,8 +278,6 @@ class SnowSoftwareWindow(QWidget):
                     "Assisted with moving Okta MFA onto new phone")
 
                 print("Successfully interacted with all form elements")
-
-
 
                 QMessageBox.information(self, "Process Complete",
                                         "The Okta reset process has been completed. You can now close the browser tab manually.")
