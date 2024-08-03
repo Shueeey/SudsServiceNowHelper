@@ -234,40 +234,59 @@ class SnowSoftwareWindow(QWidget):
             return None, None
         return username, password
 
+    import platform
+    import subprocess
+
     def start_chrome_debugging(self):
         url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
 
         system = platform.system()
         if system == "Windows":
-            cmd = f'start chrome.exe --remote-debugging-port=9222 "{url}"'
+            cmd = ['start', 'chrome.exe', '--remote-debugging-port=9222', url]
             subprocess.Popen(cmd, shell=True)
         elif system == "Darwin":  # macOS
-            cmd = f'/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug "{url}"'
-            appscript.app('Terminal').do_script(cmd)
+            cmd = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                   '--remote-debugging-port=9222',
+                   '--user-data-dir=/tmp/chrome-debug',
+                   url]
+            subprocess.Popen(cmd)
         else:
             raise OSError("Unsupported operating system")
 
         print("Started Chrome debugging instance with the specified URL")
 
     def run_okta_resets(self):
-        url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
-
         # Start Chrome with debugging and open the URL
         self.start_chrome_debugging()
+
+        # Increase wait time to ensure the page is loaded
+        time.sleep(1)
 
         with sync_playwright() as p:
             try:
                 # Connect to the existing Chrome instance
                 browser = p.chromium.connect_over_cdp("http://localhost:9222")
-                if browser:
-                    print("Connected to the existing Chrome instance")
 
-                # Get the most recently opened page (which should be our new tab)
-                page = browser.contexts[-1].pages[-1]
+                # Get all pages from all contexts
+                all_pages = [page for context in browser.contexts for page in context.pages]
 
-                page.goto(url)
+                # Find the most recently created page with the correct URL
+                target_url = "https://sydneyuni.service-now.com/"
+                target_pages = [page for page in all_pages if page.url.startswith(target_url)]
+
+                if not target_pages:
+                    raise Exception("Could not find any pages with the target URL")
+
+                # Sort pages by creation time and select the most recent one
+                target_page = \
+                sorted(target_pages, key=lambda p: p.evaluate("window.performance.timing.navigationStart"),
+                       reverse=True)[0]
+
                 # Continue with the automation
-                frame = page.frame_locator("iframe[name=\"gsft_main\"]")
+                frame = target_page.frame_locator("iframe[name=\"gsft_main\"]").first
+
+                # Wait for the frame to load
+                target_page.wait_for_load_state("networkidle")
 
                 frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
                     "Unikey/Okta Assistance")
@@ -285,10 +304,8 @@ class SnowSoftwareWindow(QWidget):
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
             finally:
-                # Close the browser context, but the main Chrome window will remain open
-                for context in browser.contexts:
-                    context.close()
-                browser.close()
+                # Disconnect from the browser without closing it
+                browser.disconnect()
 
         print("Okta reset process completed")
     def open_task_list(self):
