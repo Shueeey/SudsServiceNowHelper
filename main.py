@@ -13,6 +13,8 @@ from PyQt5.QtCore import QTimer, Qt
 
 
 from playwright.sync_api import Playwright, sync_playwright, expect
+from playwright.sync_api import expect, TimeoutError as PlaywrightTimeoutError
+
 
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
@@ -342,7 +344,7 @@ class SnowSoftwareWindow(QWidget):
             return False
 
     def start_chrome_debugging(self):
-        url = "https://sso.sydney.edu.au/app/servicenow_ud/exke4rnp1ssXMHAFB3l6/sso/saml?SAMLRequest=nVNdb9owFP0rkd9JQgKFWYCUgqoitV0E2TTtZTL2pbXm2J6vzce%2FXxJoy8PKtL36nnvuOedeT5DVKrO0CP5Fr%2BBXAPTRoVYa6akyJcFpahhKpJrVgNRzui4eH2gWp9Q64w03ikQFIjgvjZ4bjaEGtwa3kxy%2BrB6m5MV7izRJ8Cg0HIOWMZ6qPW32MTd1otnOsmeIhSHRotEgNWvJLlrRxKf2GESIWUiYtcmZpmH5EUQCh58wcNr2Eb893hd3t7m6aRuT1gqJ7ozj0Bmdki1TCCRaLqZk%2FTTffuIZcL7ZjMVonPMcIBvmw8FonOXbdNxvgVgyRLmD91bEAEuNnmk%2FJVmaDXrpuJcOqzSnwz4djuJRfvOdROU5oluphdTP1%2FPcnEBI76uq7JWf11VHsJMC3FOD%2Ftcov4LDLsaGnMwm3Uppp9xdbvm6KPa6WjL76%2FRJcjnjPNHSVvtyURol%2BTEqlDL7uQPmGz%2FeBehWUzP%2FsYx%2B3O9epOhtOyiFmklVCOEAkSRvg84nDKLbc3OLHg4%2BmpvaMiexTQIOjPu3LC5hc9U4XcH2v5K5CuOUt9zNc3tFe%2BNEexXAG52VYxqtcf41uT8pmp2LH%2Fh7L19%2B49lv&RelayState=https%3A%2F%2Fsydneyuni.service-now.com%2Fnav_to.do%3Furi%3D%252Fhome_splash.do%253Fsysparm_direct%253Dtrue"
+        url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fhome_splash.do%3Fsysparm_direct%3Dtrue"
 
         system = platform.system()
         if system == "Windows":
@@ -384,9 +386,13 @@ class SnowSoftwareWindow(QWidget):
 
                 # Wait for the page to load completely
                 page.wait_for_load_state("domcontentloaded")
-
-                # Continue with the automation
-                frame = page.frame_locator("iframe[name=\"gsft_main\"]").first
+                try:
+                    frame = page.frame_locator("iframe[name=\"gsft_main\"]").first
+                    select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
+                    expect(select_locator).to_be_visible(timeout=300)  # 0.3 seconds timeout
+                except Exception as e:
+                    QMessageBox.warning(self, "Login Required", "You should be logged in first.")
+                    return
 
                 frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
                     "Unikey/Okta Assistance")
