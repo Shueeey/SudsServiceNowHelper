@@ -4,6 +4,7 @@ import subprocess
 import openpyxl
 from datetime import datetime
 import time
+import requests
 
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QComboBox, QLineEdit, QListWidget, \
     QDialog, QMessageBox, QInputDialog, QFrame, QHBoxLayout, QStackedWidget
@@ -248,9 +249,9 @@ class SnowSoftwareWindow(QWidget):
         self.stacked_widget.setCurrentWidget(self.main_menu_widget)
 
     def show_counter_stuff_menu(self):
+        if not self.is_chrome_debugger_running():
+            self.start_chrome_debugging()
         self.stacked_widget.setCurrentWidget(self.counter_stuff_widget)
-        # Start Chrome debugging session here
-        self.start_chrome_debugging()
 
     def show_lab_management_menu(self):
         if not self.login_successful:
@@ -333,9 +334,15 @@ class SnowSoftwareWindow(QWidget):
 
     import platform
     import subprocess
+    def is_chrome_debugger_running(self):
+        try:
+            response = requests.get("http://localhost:9222/json/version")
+            return response.status_code == 200
+        except requests.exceptions.ConnectionError:
+            return False
 
     def start_chrome_debugging(self):
-        url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
+        url = "https://sso.sydney.edu.au/app/servicenow_ud/exke4rnp1ssXMHAFB3l6/sso/saml?SAMLRequest=nVNdb9owFP0rkd9JQgKFWYCUgqoitV0E2TTtZTL2pbXm2J6vzce%2FXxJoy8PKtL36nnvuOedeT5DVKrO0CP5Fr%2BBXAPTRoVYa6akyJcFpahhKpJrVgNRzui4eH2gWp9Q64w03ikQFIjgvjZ4bjaEGtwa3kxy%2BrB6m5MV7izRJ8Cg0HIOWMZ6qPW32MTd1otnOsmeIhSHRotEgNWvJLlrRxKf2GESIWUiYtcmZpmH5EUQCh58wcNr2Eb893hd3t7m6aRuT1gqJ7ozj0Bmdki1TCCRaLqZk%2FTTffuIZcL7ZjMVonPMcIBvmw8FonOXbdNxvgVgyRLmD91bEAEuNnmk%2FJVmaDXrpuJcOqzSnwz4djuJRfvOdROU5oluphdTP1%2FPcnEBI76uq7JWf11VHsJMC3FOD%2Ftcov4LDLsaGnMwm3Uppp9xdbvm6KPa6WjL76%2FRJcjnjPNHSVvtyURol%2BTEqlDL7uQPmGz%2FeBehWUzP%2FsYx%2B3O9epOhtOyiFmklVCOEAkSRvg84nDKLbc3OLHg4%2BmpvaMiexTQIOjPu3LC5hc9U4XcH2v5K5CuOUt9zNc3tFe%2BNEexXAG52VYxqtcf41uT8pmp2LH%2Fh7L19%2B49lv&RelayState=https%3A%2F%2Fsydneyuni.service-now.com%2Fnav_to.do%3Furi%3D%252Fhome_splash.do%253Fsysparm_direct%253Dtrue"
 
         system = platform.system()
         if system == "Windows":
@@ -350,7 +357,7 @@ class SnowSoftwareWindow(QWidget):
         else:
             raise OSError("Unsupported operating system")
 
-        print("Started Chrome debugging instance with the specified URL")
+        print("Started new Chrome debugging instance with the specified URL")
 
     def run_okta_resets(self):
         with sync_playwright() as p:
@@ -358,26 +365,28 @@ class SnowSoftwareWindow(QWidget):
                 # Connect to the existing Chrome instance
                 browser = p.chromium.connect_over_cdp("http://localhost:9222")
 
-                # Get all pages from all contexts
-                all_pages = [page for context in browser.contexts for page in context.pages]
+                # Get all existing contexts
+                contexts = browser.contexts
 
-                # Find the most recently created page with the correct URL
-                target_url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
-                target_pages = [page for page in all_pages if page.url.startswith(target_url)]
+                # If there are no contexts, create a new one
+                if not contexts:
+                    context = browser.new_context()
+                else:
+                    # Use the first existing context
+                    context = contexts[0]
 
-                if not target_pages:
-                    raise Exception("Could not find any pages with the target URL")
+                # Create a new page (tab) in the context
+                page = context.new_page()
 
-                # Sort pages by creation time and select the most recent one
-                target_page = \
-                sorted(target_pages, key=lambda p: p.evaluate("window.performance.timing.navigationStart"),
-                       reverse=True)[0]
+                # Navigate to the specified URL
+                page.goto(
+                    "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
+
+                # Wait for the page to load completely
+                page.wait_for_load_state("domcontentloaded")
 
                 # Continue with the automation
-                frame = target_page.frame_locator("iframe[name=\"gsft_main\"]").first
-
-                # Wait for the frame to load
-                target_page.wait_for_load_state("networkidle")
+                frame = page.frame_locator("iframe[name=\"gsft_main\"]").first
 
                 frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
                     "Unikey/Okta Assistance")
@@ -390,13 +399,13 @@ class SnowSoftwareWindow(QWidget):
                 print("Successfully interacted with all form elements")
 
                 QMessageBox.information(self, "Process Complete",
-                                        "The Okta reset process has been completed. You can now close the browser tab manually.")
+                                        "The Okta reset process has been completed. The page will remain open for your review.")
 
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
             finally:
-                # now it disconnects from the browser without closing the browser window
-                browser.close()
+                # Disconnect from the browser without closing any pages
+                browser.disconnect()
 
         print("Okta reset process completed")
     def open_task_list(self):
