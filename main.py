@@ -436,9 +436,9 @@ class SnowSoftwareWindow(QWidget):
                 try:
                     frame = okta_page.frame_locator("iframe[name=\"gsft_main\"]").first
                     select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
-                    expect(select_locator).to_be_visible(timeout=10000)
-                except PlaywrightTimeoutError:
-                    QMessageBox.warning(self, "Login Required", "You should be logged in first.")
+                    expect(select_locator).to_be_visible(timeout=1000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Login Required", "You should be logged into SNow first. You may be bought to the SSO screen by the Counter Stuff button in the Main Menu")
                     return
 
                 frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
