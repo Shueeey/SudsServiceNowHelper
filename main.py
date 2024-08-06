@@ -579,7 +579,8 @@ class SnowSoftwareWindow(QWidget):
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
             finally:
-                browser.disconnect()
+                #closes the session but keeps the browser opens
+                context.close()
 
         print("Okta reset process completed")
     def open_task_list(self):
