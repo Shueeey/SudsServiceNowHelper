@@ -382,6 +382,19 @@ class SnowSoftwareWindow(QWidget):
                 iga_page.fill("input[placeholder='Search Identities']", unikey)
                 iga_page.press("input[placeholder='Search Identities']", "Enter")
 
+                # Check for the "no results" message
+                no_results_selector = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/app-identities-list-empty-state-container/section/span'
+
+                try:
+                    iga_page.wait_for_selector(no_results_selector, timeout=1000)
+                    no_results_message = iga_page.inner_text(no_results_selector)
+                    if "We couldn't find anything that matches your query. Please try again." in no_results_message:
+                        QMessageBox.critical(self, "Error", f"The Unikey '{unikey}' doesn't exist in IGA.")
+                        return
+                except PlaywrightTimeoutError:
+                    # If the selector is not found, it means results were found, so we continue
+                    pass
+
                 # Wait for and click the search result
                 iga_page.wait_for_selector(
                     '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
@@ -441,6 +454,8 @@ class SnowSoftwareWindow(QWidget):
                     QMessageBox.warning(self, "Login Required", "You should be logged into SNow first. You may be bought to the SSO screen by the Counter Stuff button in the Main Menu")
                     return
 
+                unikey_input = frame.locator("#sys_display\\.IO\\:35028389dbe080502d38cae43a961977")
+                unikey_input.fill(unikey)
                 frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
                     "Unikey/Okta Assistance")
                 frame.locator("select[name=\"IO\\:d68099e6db29c4509909abf34a961949\"]").select_option(
@@ -577,7 +592,7 @@ class SnowSoftwareWindow(QWidget):
                                         "The Okta reset process has been completed. The pages will remain open for your review.")
 
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
+                QMessageBox.warning(self, "Error", f"An error occurred: Please go back to the main menu and click the counter stuff button")
             finally:
                 #closes the session but keeps the browser opens
                 context.close()
