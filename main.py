@@ -242,6 +242,10 @@ class SnowSoftwareWindow(QWidget):
         reprint_button.clicked.connect(self.reprint)
         layout.addWidget(reprint_button)
 
+        reprint_hold_for_auth_button = QPushButton("Printing Hold for Authentication Error")
+        reprint_hold_for_auth_button.clicked.connect(self.reprint_hold_for_auth)
+        layout.addWidget(reprint_hold_for_auth_button)
+
         self.counter_stuff_widget.setLayout(layout)  # Use self.counter_stuff_widget instead of creating a new widget
 
     def init_lab_menu(self):
@@ -878,6 +882,53 @@ class SnowSoftwareWindow(QWidget):
                 additional_details = frame.get_by_role("textbox", name="Additional details")
                 additional_details.fill(
                     f"Assisted with moving Okta MFA onto new phone.")
+                print("Successfully interacted with all form elements")
+                QMessageBox.information(self, "Process Complete",
+                                        "The reprint form has been completed. The pages will remain open for your review.")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error",
+                                    f"An error occurred: Please go back to the main menu and click the counter stuff button")
+            finally:
+                # closes the session but keeps the browser opens
+                context.close()
+
+        print("Okta reset process completed")
+
+    def reprint_hold_for_auth(self):
+        unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
+        if not ok or not unikey:
+            return
+
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                context = browser.contexts[0] if browser.contexts else browser.new_context()
+
+                reprint_page = context.new_page()
+                reprint_page.goto(
+                    "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
+
+                reprint_page.wait_for_load_state("domcontentloaded")
+
+                try:
+                    frame = reprint_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                    select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
+                    expect(select_locator).to_be_visible(timeout=1000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Login Required", "You should be logged into SNow first. You may be bought to the SSO screen by the Counter Stuff button in the Main Menu")
+                    return
+
+                unikey_input = frame.locator("#sys_display\\.IO\\:35028389dbe080502d38cae43a961977")
+                unikey_input.fill(unikey)
+                frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
+                    "Printing")
+                frame.locator("select[name=\"IO\\:9eae32dedb5dc8502d38cae43a961914\"]").select_option(
+                    "Assistance")
+
+                additional_details = frame.get_by_role("textbox", name="Additional details")
+                additional_details.fill(
+                    f"Assisted with guiding through process of inputting correct correct login details to resolve hold for authentication error that occurs on mac device.")
                 print("Successfully interacted with all form elements")
                 QMessageBox.information(self, "Process Complete",
                                         "The reprint form has been completed. The pages will remain open for your review.")
