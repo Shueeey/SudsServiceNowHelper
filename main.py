@@ -230,9 +230,17 @@ class SnowSoftwareWindow(QWidget):
         back_button.clicked.connect(self.show_main_menu)
         layout.addWidget(back_button)
 
-        run_okta_resets_button = QPushButton("Run Okta Resets")
-        run_okta_resets_button.clicked.connect(self.run_okta_resets)
+        run_okta_resets_button = QPushButton("Run Okta Resets for New Phone")
+        run_okta_resets_button.clicked.connect(self.run_okta_resets_for_new_phone)
         layout.addWidget(run_okta_resets_button)
+
+        run_okta_resets_for_deleted_app_button = QPushButton("Run Okta Resets for Deleted App")
+        run_okta_resets_for_deleted_app_button.clicked.connect(self.run_okta_resets_for_deleted_app)
+        layout.addWidget(run_okta_resets_for_deleted_app_button)
+
+        reprint_button = QPushButton("Reprint")
+        reprint_button.clicked.connect(self.reprint)
+        layout.addWidget(reprint_button)
 
         self.counter_stuff_widget.setLayout(layout)  # Use self.counter_stuff_widget instead of creating a new widget
 
@@ -360,8 +368,245 @@ class SnowSoftwareWindow(QWidget):
             raise OSError("Unsupported operating system")
 
         print("Started new Chrome debugging instance with the specified URL")
+    def run_okta_resets_for_deleted_app(self):
+        unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
+        if not ok or not unikey:
+            return
 
-    def run_okta_resets(self):
+        extro_uid_dict = {}
+
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                context = browser.contexts[0] if browser.contexts else browser.new_context()
+
+                # IGA part
+                iga_page = context.new_page()
+                iga_page.goto("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
+
+                # Wait for the search input to be available and use it
+                iga_page.wait_for_selector("input[placeholder='Search Identities']")
+                iga_page.fill("input[placeholder='Search Identities']", unikey)
+                iga_page.press("input[placeholder='Search Identities']", "Enter")
+
+                # Check for the "no results" message
+                no_results_selector = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/app-identities-list-empty-state-container/section/span'
+
+                try:
+                    iga_page.wait_for_selector(no_results_selector, timeout=1000)
+                    no_results_message = iga_page.inner_text(no_results_selector)
+                    if "We couldn't find anything that matches your query. Please try again." in no_results_message:
+                        QMessageBox.critical(self, "Error", f"The Unikey '{unikey}' doesn't exist in IGA.")
+                        return
+                except PlaywrightTimeoutError:
+                    # If the selector is not found, it means results were found, so we continue
+                    pass
+
+                # Wait for and click the search result
+                iga_page.wait_for_selector(
+                    '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+                iga_page.click(
+                    '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+
+                # Wait for the page to load and extract ExtroUID
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'extroUID')]//span")
+                extro_uid_element = iga_page.query_selector("//slpt-attribute[contains(., 'extroUID')]//span")
+                extro_uid = extro_uid_element.inner_text().strip() if extro_uid_element else "Not found"
+                extro_uid_dict['extrouid'] = extro_uid
+
+                #Wait for the page to load Student ID
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'Student ID')]//span")
+                student_id_element = iga_page.query_selector("//slpt-attribute[contains(., 'Student ID')]//span")
+                student_id = student_id_element.inner_text().strip() if student_id_element else "Not found"
+                extro_uid_dict['studentid'] = student_id
+
+                #Wait for the page to load DOB
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'DOB')]//span")
+                dob_element = iga_page.query_selector("//slpt-attribute[contains(., 'DOB')]//span")
+                dob = dob_element.inner_text().strip() if dob_element else "Not found"
+                extro_uid_dict['dob'] = dob
+
+                #Wait for the page to load Student Degree Code
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'Student Degree Code')]//span")
+                student_degree_code_element = iga_page.query_selector("//slpt-attribute[contains(., 'Student Degree Code')]//span")
+                student_degree_code = student_degree_code_element.inner_text().strip() if student_degree_code_element else "Not found"
+                extro_uid_dict['studentdegreecode'] = student_degree_code
+
+                #Wait for the page to load UOS
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'UOS')]//span")
+                uos_element = iga_page.query_selector("//slpt-attribute[contains(., 'UOS')]//span")
+                uos = uos_element.inner_text().strip() if uos_element else "Not found"
+                extro_uid_dict['uos'] = uos
+
+                #Wait for the page to load Personal Email
+                iga_page.wait_for_selector("//slpt-attribute[contains(., 'Personal Email')]//span")
+                personal_email_element = iga_page.query_selector("//slpt-attribute[contains(., 'Personal Email')]//span")
+                personal_email = personal_email_element.inner_text().strip() if personal_email_element else "Not found"
+                extro_uid_dict['personalemail'] = personal_email
+
+                print(f"ExtroUID for user {unikey}: {extro_uid}")
+
+                iga_page.close()
+                # Okta part
+                okta_page = context.new_page()
+                okta_page.goto(
+                    "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
+
+                okta_page.wait_for_load_state("domcontentloaded")
+
+                try:
+                    frame = okta_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                    select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
+                    expect(select_locator).to_be_visible(timeout=1000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Login Required", "You should be logged into SNow first. You may be bought to the SSO screen by the Counter Stuff button in the Main Menu")
+                    return
+
+                unikey_input = frame.locator("#sys_display\\.IO\\:35028389dbe080502d38cae43a961977")
+                unikey_input.fill(unikey)
+                frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
+                    "Unikey/Okta Assistance")
+                frame.locator("select[name=\"IO\\:d68099e6db29c4509909abf34a961949\"]").select_option(
+                    "Factor Reset (deleted the app)")
+
+                additional_details = frame.get_by_role("textbox", name="Additional details")
+                additional_details.fill(
+                    f"Assisted with reassiging Okta MFA onto phone after app was removed.")
+
+                #iframe creating script
+                iframe_script = f"""
+                // Create a wrapper div for the iframe
+                var wrapper = document.createElement('div');
+                wrapper.style.position = 'fixed';
+                wrapper.style.top = '300px';
+                wrapper.style.right = '10px';
+                wrapper.style.width = '300px';
+                wrapper.style.height = '320px';  // Increased to accommodate drag handle
+                wrapper.style.zIndex = '9999';
+
+                // Create drag handle
+                var dragHandle = document.createElement('div');
+                dragHandle.textContent = '{unikey} Student Information (Drag to move)';
+                dragHandle.style.backgroundColor = '#007bff';
+                dragHandle.style.color = 'white';
+                dragHandle.style.padding = '5px';
+                dragHandle.style.cursor = 'move';
+                dragHandle.style.userSelect = 'none';
+
+                // Create iframe
+                var iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.height = 'calc(100% - 30px)';  // Subtract height of drag handle
+                iframe.style.border = '1px solid #ccc';
+                iframe.style.borderRadius = '0 0 5px 5px';
+                iframe.style.backgroundColor = '#f9f9f9';
+                iframe.style.boxShadow = '0 0 10px rgba(0,0,0,0.1)';
+
+                var iframeContent = `
+                    <html>
+                        <head>
+                            <style>
+                                body {{
+                                    font-family: Arial, sans-serif;
+                                    padding: 10px;
+                                    margin: 0;
+                                }}
+                                h3 {{
+                                    margin: 10px 0 5px 0;
+                                    color: #333;
+                                    font-size: 14px;
+                                }}
+                                p {{
+                                    margin: 0 0 10px 0;
+                                    font-size: 14px;
+                                    font-weight: bold;
+                                    color: #007bff;
+                                }}
+                            </style>
+                        </head>
+                        <body>
+                            <h3>ExtroUID</h3>
+                            <p>{extro_uid_dict['extrouid']}</p>
+                            <h3>Student ID</h3>
+                            <p>{extro_uid_dict['studentid']}</p>
+                            <h3>DOB</h3>
+                            <p>{extro_uid_dict['dob']}</p>
+                            <h3>Personal Email</h3>
+                            <p>{extro_uid_dict['personalemail']}</p>
+                            <h3>Student Degree Code</h3>
+                            <p>{extro_uid_dict['studentdegreecode']}</p>
+                            <h3>UOS</h3>
+                            <p>{extro_uid_dict['uos']}</p>
+                        </body>
+                    </html>
+                `;
+
+                // Append elements
+                wrapper.appendChild(dragHandle);
+                wrapper.appendChild(iframe);
+                document.body.appendChild(wrapper);
+
+                iframe.contentWindow.document.open();
+                iframe.contentWindow.document.write(iframeContent);
+                iframe.contentWindow.document.close();
+
+                // Make wrapper draggable
+                var isDragging = false;
+                var currentX;
+                var currentY;
+                var initialX;
+                var initialY;
+                var xOffset = 0;
+                var yOffset = 0;
+
+                function dragStart(e) {{
+                    if (e.target === dragHandle) {{
+                        initialX = e.clientX - xOffset;
+                        initialY = e.clientY - yOffset;
+                        isDragging = true;
+                    }}
+                }}
+
+                function dragEnd(e) {{
+                    initialX = currentX;
+                    initialY = currentY;
+                    isDragging = false;
+                }}
+
+                function drag(e) {{
+                    if (isDragging) {{
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+                        xOffset = currentX;
+                        yOffset = currentY;
+                        setTranslate(currentX, currentY, wrapper);
+                    }}
+                }}
+
+                function setTranslate(xPos, yPos, el) {{
+                    el.style.transform = "translate3d(" + xPos + "px, " + yPos + "px, 0)";
+                }}
+
+                document.addEventListener("mousedown", dragStart, false);
+                document.addEventListener("mouseup", dragEnd, false);
+                document.addEventListener("mousemove", drag, false);
+                """
+
+                okta_page.evaluate(iframe_script)
+
+                print("Successfully interacted with all form elements")
+                QMessageBox.information(self, "Process Complete",
+                                        "The Okta reset process has been completed. The pages will remain open for your review.")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"An error occurred: Please go back to the main menu and click the counter stuff button")
+            finally:
+                #closes the session but keeps the browser opens
+                context.close()
+
+        print("Okta reset process completed")
+    def run_okta_resets_for_new_phone(self):
         unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
         if not ok or not unikey:
             return
@@ -598,6 +843,54 @@ class SnowSoftwareWindow(QWidget):
                 context.close()
 
         print("Okta reset process completed")
+
+    def reprint(self):
+        unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
+        if not ok or not unikey:
+            return
+
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                context = browser.contexts[0] if browser.contexts else browser.new_context()
+
+                reprint_page = context.new_page()
+                reprint_page.goto(
+                    "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
+
+                reprint_page.wait_for_load_state("domcontentloaded")
+
+                try:
+                    frame = reprint_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                    select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
+                    expect(select_locator).to_be_visible(timeout=1000)
+                except Exception as e:
+                    QMessageBox.warning(self, "Login Required", "You should be logged into SNow first. You may be bought to the SSO screen by the Counter Stuff button in the Main Menu")
+                    return
+
+                unikey_input = frame.locator("#sys_display\\.IO\\:35028389dbe080502d38cae43a961977")
+                unikey_input.fill(unikey)
+                frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]").select_option(
+                    "Printing")
+                frame.locator("select[name=\"IO\\:9eae32dedb5dc8502d38cae43a961914\"]").select_option(
+                    "Reprint")
+
+                additional_details = frame.get_by_role("textbox", name="Additional details")
+                additional_details.fill(
+                    f"Assisted with moving Okta MFA onto new phone.")
+                print("Successfully interacted with all form elements")
+                QMessageBox.information(self, "Process Complete",
+                                        "The reprint form has been completed. The pages will remain open for your review.")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Error",
+                                    f"An error occurred: Please go back to the main menu and click the counter stuff button")
+            finally:
+                # closes the session but keeps the browser opens
+                context.close()
+
+        print("Okta reset process completed")
+
     def open_task_list(self):
         login_dialog = LoginDialog(self)
         if login_dialog.exec_() == QDialog.Accepted:
