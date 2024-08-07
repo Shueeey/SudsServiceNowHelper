@@ -470,7 +470,7 @@ class SnowSoftwareWindow(QWidget):
                 // Create a wrapper div for the iframe
                 var wrapper = document.createElement('div');
                 wrapper.style.position = 'fixed';
-                wrapper.style.top = '10px';
+                wrapper.style.top = '300px';
                 wrapper.style.right = '10px';
                 wrapper.style.width = '300px';
                 wrapper.style.height = '320px';  // Increased to accommodate drag handle
