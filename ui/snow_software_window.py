@@ -14,6 +14,7 @@ from playwright.sync_api import Playwright, sync_playwright, expect
 from playwright.sync_api import expect, TimeoutError as PlaywrightTimeoutError
 
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
@@ -28,6 +29,7 @@ from services.print_service import reprint, reprint_hold_for_auth, filter_print_
 # URL constants
 url = "https://sydneytest.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
 task_list_url = "https://sydneytest.service-now.com/nav_to.do?uri=%2F$interactive_analysis.do%3Fsysparm_field%3Dopened_at%26sysparm_table%3Dtask%26sysparm_from_list%3Dtrue%26sysparm_query%3Dactive%3Dtrue%5Estate!%3D6%5Eassignment_group%3Djavascript:getMyGroups()%5Eassigned_to%3D%26sysparm_list_view%3Dcatalog"
+
 
 class SnowSoftwareWindow(QWidget):
     def __init__(self):
@@ -285,6 +287,7 @@ class SnowSoftwareWindow(QWidget):
 
     def reprint_hold_for_auth(self):
         reprint_hold_for_auth(self)
+
     def is_driver_alive(self):
         try:
             self.driver.title
@@ -296,6 +299,7 @@ class SnowSoftwareWindow(QWidget):
         if self.driver:
             self.driver.quit()
         event.accept()
+
     def filter_print_refund_tickets(self):
         if self.driver is None or not self.is_driver_alive():
             reply = QMessageBox.question(self, "Reopen Task List",
@@ -307,25 +311,46 @@ class SnowSoftwareWindow(QWidget):
             else:
                 return
         filter_print_refund_tickets(self)
+
     def open_task_list(self):
         login_dialog = LoginDialog(self)
         if login_dialog.exec_() == QDialog.Accepted:
             username_input, password_input = login_dialog.get_credentials()
+            if not username_input or not password_input:
+                QMessageBox.warning(self, "Error", "Both fields are required")
+                return False
+            if not is_chrome_debugger_running():
+                start_chrome_debugging()
 
             try:
-                self.driver = webdriver.Chrome()
+                chrome_options = Options()
+                chrome_options.add_experimental_option("debuggerAddress", "localhost:9222")
+                self.driver = webdriver.Chrome(options=chrome_options)
+
                 # Navigate to the task list URL
                 self.driver.get(task_list_url)
 
                 self.driver.implicitly_wait(2)
 
-                username = self.driver.find_element(By.ID, "input28")
-                username.send_keys(username_input)
+                try:
+                    username = self.driver.find_element(By.ID, "input28")
+                    username.clear()
+                    username.send_keys(username_input)
 
-                self.driver.implicitly_wait(2)
-                password = self.driver.find_element(By.ID, "input36")
-                password.send_keys(password_input)
-                print("Credentials entered")
+                    self.driver.implicitly_wait(2)
+                    password = self.driver.find_element(By.ID, "input36")
+                    password.clear()
+                    password.send_keys(password_input)
+                    print("Credentials entered")
+                except Exception as e:
+                    print("An error occurred while entering credentials, please try again:")
+                    QMessageBox.warning(self, "Error",
+                                        "An error occurred while entering credentials, please try again:")
+                    if self.driver:
+                        self.driver.quit()
+                    self.driver = None
+                    self.login_successful = False
+                    return False
 
                 # Clicks the sign in button
                 self.driver.implicitly_wait(2)
@@ -335,9 +360,12 @@ class SnowSoftwareWindow(QWidget):
 
                 self.driver.implicitly_wait(2)
 
-                choose_push_nofif = self.driver.find_element(By.XPATH,
-                                                             '//*[@id="form61"]/div[2]/div/div[2]/div[2]/div[2]')
-                choose_push_nofif.click()
+                # if push notification option shows up, click it however if it doesn't within 1 second, continue
+                try:
+                    push_notification = self.driver.find_element(By.CLASS_NAME, "o-form-button-bar")
+                    push_notification.click()
+                except:
+                    time.sleep(10)
 
                 self.login_successful = True
 
@@ -357,9 +385,7 @@ class SnowSoftwareWindow(QWidget):
                 sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
                 sign_into_papercut_btn.click()
 
-                self.driver.switch_to.window(self.driver.window_handles[0])
-                # Switch back to the original tab
-                time.sleep(10)
+
                 self.driver.execute_script("window.open('');")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
@@ -380,17 +406,3 @@ class SnowSoftwareWindow(QWidget):
                 print("Login cancelled")
                 self.login_successful = False
                 return False
-
-            #will need this later
-            def is_driver_alive(self):
-                try:
-                    self.driver.title
-                    return True
-                except:
-                    return False
-
-            #trust bro it will be used later....i think. Nah its good to have tho
-            def closeEvent(self, event):
-                if self.driver:
-                    self.driver.quit()
-                event.accept()
