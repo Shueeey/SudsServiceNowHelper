@@ -393,7 +393,7 @@ class SnowSoftwareWindow(QWidget):
                 sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
                 sign_into_papercut_btn.click()
 
-
+                time.sleep(1)
                 self.driver.execute_script("window.open('');")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
