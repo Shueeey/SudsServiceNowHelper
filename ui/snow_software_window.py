@@ -199,6 +199,14 @@ class SnowSoftwareWindow(QWidget):
         list_refund_tickets_button.clicked.connect(self.filter_print_refund_tickets)
         layout.addWidget(list_refund_tickets_button)
 
+        single_refund_ticket_button = QPushButton("Process Single Refund Ticket")
+        single_refund_ticket_button.clicked.connect(self.process_single_refund_ticket)
+        layout.addWidget(single_refund_ticket_button)
+
+    def process_single_refund_ticket(self):
+        ticket_number, ok = QInputDialog.getText(self, "Enter Ticket Number", "Please enter the ticket number:")
+        if ok and ticket_number:
+            self.filter_single_print_refund_ticket(ticket_number)
     def show_main_menu(self):
         self.stacked_widget.setCurrentWidget(self.main_menu_widget)
 

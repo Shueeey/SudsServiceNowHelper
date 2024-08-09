@@ -5,6 +5,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 import time
+import re
+
+from utils import start_chrome_debugging, is_chrome_debugger_running
+
 
 def reprint(self):
     unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
@@ -813,3 +817,163 @@ function getAllIdsAndUserInfo(doc) {
     except Exception as e:
         print("An error occurred:", e)
         QMessageBox.warning(self, "Error", f"An error occurred while filtering refund tickets: {str(e)}")
+
+
+def filter_single_print_refund_ticket(self, ticket_number):
+    if not is_chrome_debugger_running():
+        start_chrome_debugging()
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp("http://localhost:9222")
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+
+            page = context.new_page()
+            page.goto("https://sydneyuni.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do")
+
+            # Wait for the page to load
+            page.wait_for_load_state("domcontentloaded")
+
+            # Search for the ticket
+            search_input = page.get_by_placeholder("Search", exact=True)
+            search_input.fill(ticket_number)
+            search_input.press("Enter")
+
+            # Wait for the ticket page to load
+            page.wait_for_load_state("domcontentloaded")
+
+            # Check if we're on the correct page
+            if not re.search(r"(incident|sc_req_item)\.do\?sys_id=", page.url):
+                raise Exception("Not on the correct ticket page")
+
+            # Extract user information
+            user_info = page.evaluate("""
+            () => {
+                let callerIdValue = document.querySelector('#sys_display\\.incident\\.caller_id')?.value;
+                let requestedForValue = document.querySelector('#sys_display\\.sc_req_item\\.request\\.requested_for')?.value;
+                return {callerIdValue, requestedForValue};
+            }
+            """)
+
+            user_id = user_info['callerIdValue'] or user_info['requestedForValue']
+            if not user_id:
+                raise Exception("Could not find user ID")
+
+            # Extract user ID only
+            user_id = user_id.split(" - ")[-1].strip()
+
+            # Open FollowMe Print UserList
+            followme_page = context.new_page()
+            followme_page.goto("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
+
+            # Wait for the input field and enter the user ID
+            input_field = followme_page.locator('#quickFindAuto')
+            input_field.fill(user_id)
+            input_field.press("Enter")
+
+            # Click the specified link
+            link = followme_page.locator('//*[@id="content"]/div[1]/ul/li[4]/div/a/span[2]/span')
+            link.click()
+
+            # Wait for the print history to load
+            followme_page.wait_for_selector('//*[@id="content"]/div[2]/div[2]')
+
+            # Get the print history content
+            print_history_content = followme_page.locator('//*[@id="content"]/div[2]/div[2]').inner_html()
+
+            # Open IGA page
+            iga_page = context.new_page()
+            iga_page.goto("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
+
+            # Wait for the page to load and enter the user ID
+            iga_page.wait_for_load_state("domcontentloaded")
+            iga_page.evaluate(f"""
+            () => {{
+                let input = Array.from(document.getElementsByTagName('input')).find(el => el.placeholder === 'Search Identities');
+                if (input) {{
+                    input.value = "{user_id}";
+                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    input.dispatchEvent(new KeyboardEvent('keydown', {{'key': 'Enter'}}));
+                }}
+            }}
+            """)
+
+            # Wait and click the specified element
+            iga_page.wait_for_selector(
+                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+            iga_page.click(
+                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+
+            # Wait for the page to load after clicking the result
+            iga_page.wait_for_load_state("domcontentloaded")
+
+            # Extract ExtroUID
+            extro_uid = iga_page.evaluate("""
+            () => {
+                let attributes = document.getElementsByTagName('slpt-attribute');
+                for (let attribute of attributes) {
+                    if (attribute.textContent.toLowerCase().includes('extrouid')) {
+                        let span = attribute.querySelector('span');
+                        if (span) {
+                            let number = span.textContent.trim().match(/\\d+/);
+                            if (number) {
+                                return number[0];
+                            }
+                        }
+                    }
+                }
+                return 'ExtroUID not found';
+            }
+            """)
+
+            # Create floating window with print history
+            page.evaluate(f"""
+            () => {{
+                let floatingWindow = document.createElement('div');
+                floatingWindow.style.position = 'fixed';
+                floatingWindow.style.top = '20px';
+                floatingWindow.style.right = '20px';
+                floatingWindow.style.width = '600px';
+                floatingWindow.style.height = '80%';
+                floatingWindow.style.backgroundColor = '#f4f4f4';
+                floatingWindow.style.border = '1px solid #ddd';
+                floatingWindow.style.zIndex = '9999';
+                floatingWindow.style.overflow = 'auto';
+                floatingWindow.style.padding = '10px';
+                floatingWindow.style.boxShadow = '-2px 0 5px rgba(0,0,0,0.1)';
+                floatingWindow.style.fontFamily = 'Arial, sans-serif';
+                floatingWindow.style.resize = 'both';
+
+                floatingWindow.innerHTML = `
+                    <style>
+                        // ... (include all the styles from the original function)
+                    </style>
+                    <div class="print-history-header">
+                        <h2 class="print-history-title">Print History for {user_id} - <span class="extro-uid" title="Click to copy">{extro_uid}</span></h2>
+                        <button class="print-history-close" onclick="this.closest('div[style]').remove();">×</button>
+                    </div>
+                    <div class="tooltip">Copied!</div>
+                    <div class="print-history-content">
+                        {print_history_content}
+                    </div>
+                    <div class="export-buttons">
+                        <button class="export-button">PDF</button>
+                        <button class="export-button">CSV</button>
+                        <button class="export-button">Excel</button>
+                    </div>
+                `;
+
+                document.body.appendChild(floatingWindow);
+
+                // ... (include all the JavaScript for dragging, positioning, and copy functionality)
+            }}
+            """)
+
+            print(f"Created floating window with print history for ticket: {ticket_number}")
+
+    except Exception as e:
+        print(f"Error processing ticket {ticket_number}: {str(e)}")
+        QMessageBox.warning(self, "Error", f"An error occurred while processing ticket {ticket_number}: {str(e)}")
+
+    print(f"Finished processing ticket {ticket_number}.")
+
