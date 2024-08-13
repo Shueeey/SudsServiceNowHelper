@@ -42,23 +42,26 @@ def is_chrome_debugger_running():
     except requests.exceptions.ConnectionError:
         return False
 
+
 def start_chrome_debugging():
-    url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fhome_splash.do%3Fsysparm_direct%3Dtrue"
+    url1 = "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fhome_splash.do%3Fsysparm_direct%3Dtrue"
+    url2 = "https://followme-print.sydney.edu.au:9192/app?service=page/UserList"
+    url3 = "https://sydneyuni-admin.okta.com/admin/dashboard"
 
     system = platform.system()
     if system == "Windows":
-        cmd = ['start', 'chrome.exe', '--remote-debugging-port=9222', url]
+        cmd = ['start', 'chrome.exe', '--remote-debugging-port=9222', url1, url2, url3]
         subprocess.Popen(cmd, shell=True)
     elif system == "Darwin":  # macOS
         cmd = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
                '--remote-debugging-port=9222',
                '--user-data-dir=/tmp/chrome-debug',
-               url]
+               url1, url2, url3]
         subprocess.Popen(cmd)
     else:
         raise OSError("Unsupported operating system")
 
-    print("Started new Chrome debugging instance with the specified URL")
+    print("Started new Chrome debugging instance with the specified URLs")
 
 def open_url_in_new_tab(url):
     try:

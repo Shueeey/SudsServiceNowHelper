@@ -23,12 +23,15 @@ from selenium.webdriver.common.by import By
 from ui.login_dialog import LoginDialog
 from utils.browser_utils import open_url, is_chrome_debugger_running, start_chrome_debugging
 from utils.excel_utils import initialize_workbook, save_to_excel
-from services.okta_service import run_okta_resets_for_new_phone, run_okta_resets_for_deleted_app
-from services.print_service import reprint, reprint_hold_for_auth, filter_print_refund_tickets
+from services.okta_service import run_okta_resets_for_new_phone, run_okta_resets_for_deleted_app, \
+    run_okta_resets_for_deleted_app_with_card
+from services.print_service import reprint, reprint_hold_for_auth, filter_print_refund_tickets, \
+    process_single_ticket_refund
 
 # URL constants
 url = "https://sydneytest.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search"
-task_list_url = "https://sydneytest.service-now.com/nav_to.do?uri=%2F$interactive_analysis.do%3Fsysparm_field%3Dopened_at%26sysparm_table%3Dtask%26sysparm_from_list%3Dtrue%26sysparm_query%3Dactive%3Dtrue%5Estate!%3D6%5Eassignment_group%3Djavascript:getMyGroups()%5Eassigned_to%3D%26sysparm_list_view%3Dcatalog"
+task_list_url = "https://sydneyuni.service-now.com/nav_to.do?uri=%2F$interactive_analysis.do%3Fsysparm_field%3Dnumber%26sysparm_table%3Dtask%26sysparm_from_list%3Dtrue%26sysparm_query%3Dactive%3Dtrue%5Estate!%3D6%5Eassignment_group%3Djavascript:getMyGroups()%5Eassigned_to%3D%26sysparm_list_view%3D"
+
 
 
 class SnowSoftwareWindow(QWidget):
@@ -178,6 +181,10 @@ class SnowSoftwareWindow(QWidget):
         run_okta_resets_for_deleted_app_button.clicked.connect(self.run_okta_resets_for_deleted_app)
         layout.addWidget(run_okta_resets_for_deleted_app_button)
 
+        run_okta_resets_using_card_button = QPushButton("Run Okta Resets using Card")
+        run_okta_resets_using_card_button.clicked.connect(self.run_okta_resets_for_deleted_app_with_card)
+        layout.addWidget(run_okta_resets_using_card_button)
+
         reprint_button = QPushButton("Reprint")
         reprint_button.clicked.connect(self.reprint)
         layout.addWidget(reprint_button)
@@ -199,14 +206,10 @@ class SnowSoftwareWindow(QWidget):
         list_refund_tickets_button.clicked.connect(self.filter_print_refund_tickets)
         layout.addWidget(list_refund_tickets_button)
 
-        single_refund_ticket_button = QPushButton("Process Single Refund Ticket")
-        single_refund_ticket_button.clicked.connect(self.process_single_refund_ticket)
+        single_refund_ticket_button = QPushButton("Refund for Single Ticket")
+        single_refund_ticket_button.clicked.connect(self.process_single_ticket_refund)
         layout.addWidget(single_refund_ticket_button)
 
-    def process_single_refund_ticket(self):
-        ticket_number, ok = QInputDialog.getText(self, "Enter Ticket Number", "Please enter the ticket number:")
-        if ok and ticket_number:
-            self.filter_single_print_refund_ticket(ticket_number)
     def show_main_menu(self):
         self.stacked_widget.setCurrentWidget(self.main_menu_widget)
 
@@ -290,6 +293,8 @@ class SnowSoftwareWindow(QWidget):
     def run_okta_resets_for_deleted_app(self):
         run_okta_resets_for_deleted_app(self)
 
+    def run_okta_resets_for_deleted_app_with_card(self):
+        run_okta_resets_for_deleted_app_with_card(self)
     def reprint(self):
         reprint(self)
 
@@ -320,6 +325,9 @@ class SnowSoftwareWindow(QWidget):
                 return
         filter_print_refund_tickets(self)
 
+    def process_single_ticket_refund(self):
+        process_single_ticket_refund(self)
+
     def open_task_list(self):
         login_dialog = LoginDialog(self)
         if login_dialog.exec_() == QDialog.Accepted:
@@ -327,8 +335,8 @@ class SnowSoftwareWindow(QWidget):
             if not username_input or not password_input:
                 QMessageBox.warning(self, "Error", "Both fields are required")
                 return False
-            if not is_chrome_debugger_running():
-                start_chrome_debugging()
+        if not is_chrome_debugger_running():
+            start_chrome_debugging()
 
             try:
                 chrome_options = Options()
@@ -373,7 +381,7 @@ class SnowSoftwareWindow(QWidget):
                     push_notification = self.driver.find_element(By.CLASS_NAME, "o-form-button-bar")
                     push_notification.click()
                 except:
-                    time.sleep(10)
+                    pass
 
                 self.login_successful = True
 
@@ -393,7 +401,7 @@ class SnowSoftwareWindow(QWidget):
                 sign_into_papercut_btn = self.driver.find_element(By.XPATH, '//*[@id="login"]/input')
                 sign_into_papercut_btn.click()
 
-                time.sleep(1)
+
                 self.driver.execute_script("window.open('');")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 self.driver.get("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")

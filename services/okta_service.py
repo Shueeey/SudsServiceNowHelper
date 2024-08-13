@@ -48,14 +48,14 @@ def run_okta_resets_for_new_phone(parent):
             iga_page.close()
 
             # Okta part
-            okta_page = context.new_page()
-            okta_page.goto(
+            snow_page = context.new_page()
+            snow_page.goto(
                 "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
 
-            okta_page.wait_for_load_state("domcontentloaded")
+            snow_page.wait_for_load_state("domcontentloaded")
 
             try:
-                frame = okta_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                frame = snow_page.frame_locator("iframe[name=\"gsft_main\"]").first
                 select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
                 expect(select_locator).to_be_visible(timeout=1000)
             except Exception as e:
@@ -65,7 +65,7 @@ def run_okta_resets_for_new_phone(parent):
 
             fill_okta_form(frame, unikey, "Factor Reset (new phone)")
 
-            create_floating_info_window(okta_page, unikey, extro_uid_dict)
+            create_floating_info_window(snow_page, unikey, extro_uid_dict)
 
             print("Successfully interacted with all form elements")
             QMessageBox.information(parent, "Process Complete",
@@ -125,14 +125,14 @@ def run_okta_resets_for_deleted_app(parent):
             iga_page.close()
 
             # Okta part
-            okta_page = context.new_page()
-            okta_page.goto(
+            snow_page = context.new_page()
+            snow_page.goto(
                 "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
 
-            okta_page.wait_for_load_state("domcontentloaded")
+            snow_page.wait_for_load_state("domcontentloaded")
 
             try:
-                frame = okta_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                frame = snow_page.frame_locator("iframe[name=\"gsft_main\"]").first
                 select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
                 expect(select_locator).to_be_visible(timeout=1000)
             except Exception as e:
@@ -142,7 +142,7 @@ def run_okta_resets_for_deleted_app(parent):
 
             fill_okta_form(frame, unikey, "Factor Reset (deleted the app)")
 
-            create_floating_info_window(okta_page, unikey, extro_uid_dict)
+            create_floating_info_window(snow_page, unikey, extro_uid_dict)
 
             print("Successfully interacted with all form elements")
             QMessageBox.information(parent, "Process Complete",
@@ -155,6 +155,123 @@ def run_okta_resets_for_deleted_app(parent):
 
     print("Okta reset process completed")
 
+def run_okta_resets_for_deleted_app_with_card(parent):
+    card_number, ok = QInputDialog.getText(parent, "Scan number", "Please scan the card:")
+    if not ok or not card_number:
+        return
+
+    extro_uid_dict = {}
+
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp("http://localhost:9222")
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+
+            # PaperCut part
+            ppc_page = context.new_page()
+            ppc_page.goto("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
+
+            #if the element with id loginBody appears, suggest the user to login to papercut first before pressing button
+            try:
+                ppc_page.wait_for_selector("#loginBody", timeout=1000)
+                QMessageBox.warning(parent, "Login Required",
+                                    "You should be logged into PaperCut first. You may be brought to the SSO screen by the Counter Stuff button in the Main Menu")
+                return
+            except Exception:
+                # If the selector is not found, it means results were found, so we continue
+                pass
+
+            # Wait for the search input to be available and use it
+            ppc_page.wait_for_selector("input[placeholder='Search e.g. user/card/email']")
+            ppc_page.fill("input[placeholder='Search e.g. user/card/email']", card_number)
+            ppc_page.press("input[placeholder='Search e.g. user/card/email']", "Enter")
+
+            #the text that is at id="username" is the unikey
+            ppc_page.wait_for_selector('//*[@id="content"]/div[2]/div[2]/table/tbody/tr[2]/td[2]/form/table/tbody/tr[1]/td/p[1]/span[2]')
+            unikey = ppc_page.inner_text('//*[@id="content"]/div[2]/div[2]/table/tbody/tr[2]/td[2]/form/table/tbody/tr[1]/td/p[1]/span[2]')
+
+            ppc_page.close()
+
+            # IGA part
+            iga_page = context.new_page()
+            iga_page.goto("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
+
+            # Wait for the search input to be available and use it
+            iga_page.wait_for_selector("input[placeholder='Search Identities']")
+            iga_page.fill("input[placeholder='Search Identities']", unikey)
+            iga_page.press("input[placeholder='Search Identities']", "Enter")
+
+            # Check for the "no results" message
+            no_results_selector = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/app-identities-list-empty-state-container/section/span'
+
+            try:
+                iga_page.wait_for_selector(no_results_selector, timeout=1000)
+                no_results_message = iga_page.inner_text(no_results_selector)
+                if "We couldn't find anything that matches your query. Please try again." in no_results_message:
+                    QMessageBox.critical(parent, "Error", f"The Unikey '{unikey}' doesn't exist in IGA.")
+                    return
+            except Exception:
+                # If the selector is not found, it means results were found, so we continue
+                pass
+
+            # Wait for and click the search result
+            iga_page.wait_for_selector(
+                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+            iga_page.click(
+                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
+
+            # Extract user information
+            extro_uid_dict = extract_user_info(iga_page)
+
+            iga_page.close()
+
+            # SNow part
+            snow_page = context.new_page()
+            snow_page.goto(
+                "https://sydneyuni.service-now.com/nav_to.do?uri=%2Fcom.glideapp.servicecatalog_cat_item_view.do%3Fv%3D1%26sysparm_id%3D3c714f09dbe080502d38cae43a9619cd%26sysparm_link_parent%3D5fbc29844fba1fc05ad9d0311310c75d%26sysparm_catalog%3D09a851b34faadbc05ad9d0311310c7e7%26sysparm_catalog_view%3Dsm_cat_categories%26sysparm_view%3Dtext_search")
+
+            snow_page.wait_for_load_state("domcontentloaded")
+
+            try:
+                frame = snow_page.frame_locator("iframe[name=\"gsft_main\"]").first
+                select_locator = frame.locator("select[name=\"IO\\:1352c389dbe080502d38cae43a96194c\"]")
+                expect(select_locator).to_be_visible(timeout=1000)
+            except Exception as e:
+                QMessageBox.warning(parent, "Login Required",
+                                    "You should be logged into SNow first. You may be brought to the SSO screen by the Counter Stuff button in the Main Menu")
+                return
+
+            fill_okta_form(frame, unikey, "Factor Reset (deleted the app)")
+
+            # Okta part
+            okta_page = context.new_page()
+            okta_page.goto("https://sydneyuni-admin.okta.com/admin/dashboard")
+
+        # if the element with id login28 appears, suggest the user to first login to okta
+            try:
+                okta_page.wait_for_selector("#login28", timeout=1000)
+                QMessageBox.warning(parent, "Login Required",
+                                    "You should be logged into Okta first. You may be brought to the SSO screen by the Counter Stuff button in the Main Menu")
+                return
+            except Exception:
+                # If the selector is not found, it means results were found, so we continue
+                pass
+            create_floating_info_window(okta_page, unikey, extro_uid_dict)
+            okta_page.wait_for_selector("#spotlight-search-bar")
+            okta_page.fill("#spotlight-search-bar", unikey)
+            okta_page.press("#spotlight-search-bar", "Enter")
+            okta_page.wait_for_selector("spotlight-user-result-item-TOP_RESULT-00ublc0y5g9mrhuGg3l6")
+            okta_page.click("spotlight-user-result-item-TOP_RESULT-00ublc0y5g9mrhuGg3l6")
+
+            QMessageBox.information(parent, "Process Complete",
+                                    "The Okta reset process has been completed. The pages will remain open for your review.")
+
+        except Exception as e:
+                QMessageBox.warning(parent, "Error", f"An error occurred: {str(e)}")
+        finally:
+                context.close()
+
+    print("Okta reset process completed")
 
 def extract_user_info(page):
     extro_uid_dict = {}
@@ -314,4 +431,3 @@ def create_floating_info_window(page, unikey, extro_uid_dict):
 
     page.evaluate(iframe_script)
 
-# You might want to add any additional helper functions here if needed

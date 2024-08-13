@@ -1,14 +1,20 @@
 from playwright.sync_api import sync_playwright, expect
 from PyQt5.QtWidgets import QInputDialog, QMessageBox
+from selenium.common import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 import time
-import re
 
-from utils import start_chrome_debugging, is_chrome_debugger_running
-
+def wait_for_dom_content(self, timeout=10):
+    try:
+        WebDriverWait(self.driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "interactive"
+            or d.execute_script("return document.readyState") == "complete"
+        )
+    except TimeoutException:
+        print("Timeout waiting for DOMContentLoaded")
 
 def reprint(self):
     unikey, ok = QInputDialog.getText(self, "Enter Unikey", "Please enter the Unikey:")
@@ -446,7 +452,7 @@ function getAllIdsAndUserInfo(doc) {
                                         print(f"Opened FollowMe Print UserList for user: {user_id}")
 
                                         # Wait for the link to be clickable and then click it
-                                        link_xpath = '//*[@id="content"]/div[1]/ul/li[4]/div/a/span[2]/span'
+                                        link_xpath = '//*[@id="pageactions"]/ul/li[3]/a'
                                         WebDriverWait(self.driver, 10).until(
                                             EC.element_to_be_clickable((By.XPATH, link_xpath))
                                         )
@@ -458,12 +464,12 @@ function getAllIdsAndUserInfo(doc) {
                                         # Wait for the print history to load
                                         WebDriverWait(self.driver, 10).until(
                                             EC.presence_of_element_located(
-                                                (By.XPATH, '//*[@id="content"]/div[2]/div[2]'))
+                                                (By.CLASS_NAME, 'table-box'))
                                         )
 
                                         # Get the print history content
-                                        print_history_content = self.driver.find_element(By.XPATH,
-                                                                                         '//*[@id="content"]/div[2]/div[2]').get_attribute(
+                                        print_history_content = self.driver.find_element(By.CLASS_NAME,
+                                                                                         'table-box').get_attribute(
                                             'outerHTML')
 
                                         # Open IGA page in a new tab
@@ -507,9 +513,6 @@ function getAllIdsAndUserInfo(doc) {
                                         else:
                                             print("Failed to find the search input in IGA")
 
-                                        # Wait for 1 second
-                                        time.sleep(1)
-
                                         # Click the specified element
                                         click_xpath = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span'
                                         WebDriverWait(self.driver, 10).until(
@@ -523,7 +526,6 @@ function getAllIdsAndUserInfo(doc) {
                                             EC.presence_of_element_located(
                                                 (By.XPATH, '//*[@id="single-spa-application:cloud-ui-admiral"]'))
                                         )
-                                        time.sleep(3)
                                         print_all_text_script = """
                                         function getAllText() {
                                             return document.body.innerText;
@@ -818,123 +820,285 @@ function getAllIdsAndUserInfo(doc) {
         print("An error occurred:", e)
         QMessageBox.warning(self, "Error", f"An error occurred while filtering refund tickets: {str(e)}")
 
+def process_single_ticket_refund(self):
+    ticket_number, ok = QInputDialog.getText(self, "Enter Ticket Number", "Please enter the ticket number:")
+    if not ok or not ticket_number:
+        return
 
-def filter_single_print_refund_ticket(self, ticket_number):
-    if not is_chrome_debugger_running():
-        start_chrome_debugging()
+    if self.driver is None or not self.is_driver_alive():
+        reply = QMessageBox.question(self, "Open Browser",
+                                     "Browser is not open. Would you like to open it?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            if not self.open_task_list():
+                return
+        else:
+            return
 
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp("http://localhost:9222")
-            context = browser.contexts[0] if browser.contexts else browser.new_context()
+        # Navigate to the search page
+        self.driver.get("https://sydneyuni.service-now.com/nav_to.do?uri=%2F$interactive_analysis.do%3Fsysparm_field%3Dnumber%26sysparm_table%3Dtask%26sysparm_from_list%3Dtrue%26sysparm_query%3Dactive%3Dtrue%5Estate!%3D6%5Eassignment_group%3Djavascript:getMyGroups()%5Eassigned_to%3D%26sysparm_list_view%3D")
 
-            page = context.new_page()
-            page.goto("https://sydneyuni.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do")
+        # Wait for the search input to be available
+        search_input = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Search']"))
+        )
 
-            # Wait for the page to load
-            page.wait_for_load_state("domcontentloaded")
+        # Enter the ticket number and search
+        search_input.clear()
+        search_input.send_keys(ticket_number)
+        search_input.send_keys(Keys.RETURN)
 
-            # Search for the ticket
-            search_input = page.get_by_placeholder("Search", exact=True)
-            search_input.fill(ticket_number)
-            search_input.press("Enter")
+        # Wait for the page to load
+        WebDriverWait(self.driver, 20).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
 
-            # Wait for the ticket page to load
-            page.wait_for_load_state("domcontentloaded")
+        # Wait for the iframe to be present
+        WebDriverWait(self.driver, 20).until(
+            EC.presence_of_element_located((By.ID, "gsft_main"))
+        )
 
-            # Check if we're on the correct page
-            if not re.search(r"(incident|sc_req_item)\.do\?sys_id=", page.url):
-                raise Exception("Not on the correct ticket page")
+        # Switch to the iframe
+        self.driver.switch_to.frame("gsft_main")
 
-            # Extract user information
-            user_info = page.evaluate("""
-            () => {
-                let callerIdValue = document.querySelector('#sys_display\\.incident\\.caller_id')?.value;
-                let requestedForValue = document.querySelector('#sys_display\\.sc_req_item\\.request\\.requested_for')?.value;
-                return {callerIdValue, requestedForValue};
-            }
-            """)
-
-            user_id = user_info['callerIdValue'] or user_info['requestedForValue']
-            if not user_id:
-                raise Exception("Could not find user ID")
-
-            # Extract user ID only
-            user_id = user_id.split(" - ")[-1].strip()
-
-            # Open FollowMe Print UserList
-            followme_page = context.new_page()
-            followme_page.goto("https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
-
-            # Wait for the input field and enter the user ID
-            input_field = followme_page.locator('#quickFindAuto')
-            input_field.fill(user_id)
-            input_field.press("Enter")
-
-            # Click the specified link
-            link = followme_page.locator('//*[@id="content"]/div[1]/ul/li[4]/div/a/span[2]/span')
-            link.click()
-
-            # Wait for the print history to load
-            followme_page.wait_for_selector('//*[@id="content"]/div[2]/div[2]')
-
-            # Get the print history content
-            print_history_content = followme_page.locator('//*[@id="content"]/div[2]/div[2]').inner_html()
-
-            # Open IGA page
-            iga_page = context.new_page()
-            iga_page.goto("https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
-
-            # Wait for the page to load and enter the user ID
-            iga_page.wait_for_load_state("domcontentloaded")
-            iga_page.evaluate(f"""
-            () => {{
-                let input = Array.from(document.getElementsByTagName('input')).find(el => el.placeholder === 'Search Identities');
-                if (input) {{
-                    input.value = "{user_id}";
-                    input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    input.dispatchEvent(new KeyboardEvent('keydown', {{'key': 'Enter'}}));
-                }}
-            }}
-            """)
-
-            # Wait and click the specified element
-            iga_page.wait_for_selector(
-                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
-            iga_page.click(
-                '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span')
-
-            # Wait for the page to load after clicking the result
-            iga_page.wait_for_load_state("domcontentloaded")
-
-            # Extract ExtroUID
-            extro_uid = iga_page.evaluate("""
-            () => {
-                let attributes = document.getElementsByTagName('slpt-attribute');
-                for (let attribute of attributes) {
-                    if (attribute.textContent.toLowerCase().includes('extrouid')) {
-                        let span = attribute.querySelector('span');
-                        if (span) {
-                            let number = span.textContent.trim().match(/\\d+/);
-                            if (number) {
-                                return number[0];
-                            }
-                        }
+        # Enhanced JavaScript function to get all IDs and user info
+        get_all_ids_and_user_info_script = """
+        function getAllIdsAndUserInfo(doc) {
+            var elements = doc.getElementsByTagName('*');
+            var ids = [];
+            var callerIdValue = null;
+            var requestedForValue = null;
+            for (var i = 0; i < elements.length; i++) {
+                if (elements[i].id) {
+                    ids.push(elements[i].id);
+                    if (elements[i].id === 'sys_display.incident.caller_id') {
+                        callerIdValue = elements[i].value;
+                    }
+                    if (elements[i].id === 'sys_display.original.sc_req_item.request.requested_for') {
+                        requestedForValue = elements[i].value;
                     }
                 }
-                return 'ExtroUID not found';
             }
-            """)
+            return {ids: ids, callerIdValue: callerIdValue, requestedForValue: requestedForValue};
+        }
+        
+        function getAllIdsAndUserInfoIncludingIframes(doc) {
+            var result = getAllIdsAndUserInfo(doc);
+            var allIds = result.ids;
+            var callerIdValue = result.callerIdValue;
+            var requestedForValue = result.requestedForValue;
 
-            # Create floating window with print history
-            page.evaluate(f"""
-            () => {{
-                let floatingWindow = document.createElement('div');
+            // Check iframes
+            var iframes = doc.getElementsByTagName('iframe');
+            for (var i = 0; i < iframes.length; i++) {
+                try {
+                    var iframeResult = getAllIdsAndUserInfoIncludingIframes(iframes[i].contentDocument);
+                    allIds = allIds.concat(iframeResult.ids);
+                    if (!callerIdValue && iframeResult.callerIdValue) {
+                        callerIdValue = iframeResult.callerIdValue;
+                    }
+                    if (!requestedForValue && iframeResult.requestedForValue) {
+                        requestedForValue = iframeResult.requestedForValue;
+                    }
+                } catch(e) {
+                    console.log('Cannot access iframe:', e);
+                }
+            }
+
+            return {ids: allIds, callerIdValue: callerIdValue, requestedForValue: requestedForValue};
+        }
+
+        return getAllIdsAndUserInfoIncludingIframes(document);
+        """
+        def extract_user_id(full_string):
+            if full_string and " - " in full_string:
+                return full_string.split(" - ")[-1].strip()
+            return full_string
+
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        # Execute the JavaScript to get all IDs and user info
+        result = self.driver.execute_script(get_all_ids_and_user_info_script)
+
+        all_ids = result['ids']
+        caller_id_value = result['callerIdValue']
+        requested_for_value = result['requestedForValue']
+
+        print(f"\nProcessing ticket: {ticket_number}")
+        print(f"Total IDs found: {len(all_ids)}")
+
+        user_ids = []
+
+        if caller_id_value:
+            caller_user_id = extract_user_id(caller_id_value)
+            user_ids.append(caller_user_id)
+            print(f"Caller ID (user ID only): {caller_user_id}")
+
+        if requested_for_value:
+            requested_for_user_id = extract_user_id(requested_for_value)
+            user_ids.append(requested_for_user_id)
+            print(f"Requested For (user ID only): {requested_for_user_id}")
+
+        if not user_ids:
+            print("No user IDs found in this ticket")
+            return
+
+        for user_id in user_ids:
+            try:
+                # Open FollowMe Print UserList in a new tab
+                self.driver.execute_script("window.open('');")
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                self.driver.get(
+                    "https://followme-print.sydney.edu.au:9192/app?service=page/UserList")
+
+                # Wait for the page to load and the input field to be present
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, '//*[@id="quickFindAuto"]'))
+                )
+
+                # Find the input field and enter the user ID
+                input_field = self.driver.find_element(By.XPATH, '//*[@id="quickFindAuto"]')
+                input_field.send_keys(user_id)
+                input_field.send_keys(Keys.RETURN)
+
+                print(f"Opened FollowMe Print UserList for user: {user_id}")
+
+                # Wait for the link to be clickable and then click it
+                link_xpath = '//*[@id="pageactions"]/ul/li[3]/a'
+                WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, link_xpath))
+                )
+                link = self.driver.find_element(By.XPATH, link_xpath)
+                link.click()
+
+                print(f"Clicked the specified link for user: {user_id}")
+
+                # Wait for the print history to load
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.CLASS_NAME, 'table-box'))
+                )
+
+                # Get the print history content
+                print_history_content = self.driver.find_element(By.CLASS_NAME,
+                                                                 'table-box').get_attribute(
+                    'outerHTML')
+
+                # Open IGA page in a new tab
+                self.driver.execute_script("window.open('');")
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                self.driver.get(
+                    "https://iga.sydney.edu.au/ui/a/admin/identities/all-identities")
+
+                # Use JavaScript to find the input element and enter the user ID
+                find_and_input_script = """
+                function findInputByPlaceholder(placeholder) {
+                    var inputs = document.getElementsByTagName('input');
+                    for (var i = 0; i < inputs.length; i++) {
+                        if (inputs[i].placeholder === placeholder) {
+                            return inputs[i];
+                        }
+                    }
+                    return null;
+                }
+
+                var input = findInputByPlaceholder('Search Identities');
+                if (input) {
+                    input.value = arguments[0];
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent('keydown', {'key': 'Enter'}));
+                    return true;
+                }
+                return false;
+                """
+
+                # Wait for the page to load and the input to be available
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+
+                # Execute the script to find and input the user ID
+                success = self.driver.execute_script(find_and_input_script, user_id)
+
+                if success:
+                    print(f"Entered user ID {user_id} in IGA search")
+                else:
+                    print("Failed to find the search input in IGA")
+
+                # Click the specified element
+                click_xpath = '//*[@id="single-spa-application:cloud-ui-admiral"]/app-cloud-ui-admiral-root/app-identities-list-page/div/div/app-identities-list/div/div/div/slpt-composite-card-grid/div/slpt-composite-data-grid/div/div[1]/div/slpt-data-grid/ag-grid-angular/div[2]/div[1]/div[2]/div[3]/div[1]/div[2]/div/div/div[1]/slpt-data-grid-link-cell/slpt-link/a/div/span'
+                WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, click_xpath))
+                )
+                click_element = self.driver.find_element(By.XPATH, click_xpath)
+                click_element.click()
+
+                # Wait for the page to load after clicking the result
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.XPATH, '//*[@id="single-spa-application:cloud-ui-admiral"]'))
+                )
+
+                # Check if ExtroUID exists on the page
+                check_extro_uid_exists_script = """
+                function checkExtroUIDExists() {
+                    var bodyText = document.body.innerText;
+                    return bodyText.toLowerCase().includes('extrouid');
+                }
+                return checkExtroUIDExists();
+                """
+
+                try:
+                    extro_uid_exists = self.driver.execute_script(
+                        check_extro_uid_exists_script)
+                    if extro_uid_exists:
+                        print("ExtroUID found on the page")
+
+                        # If ExtroUID exists, proceed with extraction
+                        extract_extro_uid_script = """
+                        function findExtroUID() {
+                            var attributes = document.getElementsByTagName('slpt-attribute');
+                            for (var i = 0; i < attributes.length; i++) {
+                                var attribute = attributes[i];
+                                if (attribute.textContent.toLowerCase().includes('extrouid')) {
+                                    var span = attribute.querySelector('span');
+                                    if (span) {
+                                        var number = span.textContent.trim().match(/\d+/);
+                                        if (number) {
+                                            return number[0];
+                                        }
+                                    }
+                                }
+                            }
+                            return 'ExtroUID not found';
+                        }
+                        return findExtroUID();
+                        """
+
+                        extro_uid = self.driver.execute_script(extract_extro_uid_script)
+                        print(f"ExtroUID for user {user_id}: {extro_uid}")
+                    else:
+                        print("ExtroUID not found on the page")
+                        extro_uid = "ExtroUID not present"
+                except Exception as e:
+                    print(f"Error checking/extracting ExtroUID: {str(e)}")
+                    extro_uid = "ExtroUID extraction failed"
+
+                # Switch back to the original ServiceNow tab
+                self.driver.switch_to.window(self.driver.window_handles[0])
+
+                # Create a floating window with the print history content and additional info
+                create_floating_window_script = f"""
+                var floatingWindow = document.createElement('div');
                 floatingWindow.style.position = 'fixed';
                 floatingWindow.style.top = '20px';
                 floatingWindow.style.right = '20px';
                 floatingWindow.style.width = '600px';
                 floatingWindow.style.height = '80%';
+                floatingWindow.style.minWidth = '300px';
+                floatingWindow.style.minHeight = '200px';
                 floatingWindow.style.backgroundColor = '#f4f4f4';
                 floatingWindow.style.border = '1px solid #ddd';
                 floatingWindow.style.zIndex = '9999';
@@ -946,7 +1110,79 @@ def filter_single_print_refund_ticket(self, ticket_number):
 
                 floatingWindow.innerHTML = `
                     <style>
-                        // ... (include all the styles from the original function)
+                        .print-history-header {{
+                            background-color: #2c3e50;
+                            color: white;
+                            padding: 10px;
+                            margin: -10px -10px 10px -10px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            cursor: move;
+                        }}
+                        .print-history-title {{
+                            margin: 0;
+                            font-size: 18px;
+                        }}
+                        .print-history-close {{
+                            background: none;
+                            border: none;
+                            color: white;
+                            font-size: 20px;
+                            cursor: pointer;
+                        }}
+                        .print-history-table {{
+                            width: 100%;
+                            border-collapse: collapse;
+                        }}
+                        .print-history-table th {{
+                            background-color: #34495e;
+                            color: white;
+                            text-align: left;
+                            padding: 8px;
+                        }}
+                        .print-history-table td {{
+                            background-color: white;
+                            border-bottom: 1px solid #ddd;
+                            padding: 8px;
+                        }}
+                        .print-history-table tr:hover td {{
+                            background-color: #f5f5f5;
+                        }}
+                        .status-printed {{
+                            color: #27ae60;
+                        }}
+                        .status-refund {{
+                            color: #2980b9;
+                        }}
+                        .export-buttons {{
+                            margin-top: 10px;
+                        }}
+                        .export-button {{
+                            background-color: #3498db;
+                            color: white;
+                            border: none;
+                            padding: 5px 10px;
+                            margin-right: 5px;
+                            cursor: pointer;
+                        }}
+                        .extro-uid {{
+                            cursor: pointer;
+                            text-decoration: underline;
+                            color: #3498db;
+                        }}
+                        .extro-uid:hover {{
+                            color: #2980b9;
+                        }}
+                        .tooltip {{
+                            position: absolute;
+                            background-color: #333;
+                            color: #fff;
+                            padding: 5px;
+                            border-radius: 3px;
+                            font-size: 12px;
+                            display: none;
+                        }}
                     </style>
                     <div class="print-history-header">
                         <h2 class="print-history-title">Print History for {user_id} - <span class="extro-uid" title="Click to copy">{extro_uid}</span></h2>
@@ -965,15 +1201,109 @@ def filter_single_print_refund_ticket(self, ticket_number):
 
                 document.body.appendChild(floatingWindow);
 
-                // ... (include all the JavaScript for dragging, positioning, and copy functionality)
-            }}
-            """)
+                // Make the window draggable
+                var header = floatingWindow.querySelector('.print-history-header');
+                var isDragging = false;
+                var dragOffsetX, dragOffsetY;
 
-            print(f"Created floating window with print history for ticket: {ticket_number}")
+                header.addEventListener('mousedown', function(e) {{
+                    isDragging = true;
+                    dragOffsetX = e.clientX - floatingWindow.offsetLeft;
+                    dragOffsetY = e.clientY - floatingWindow.offsetTop;
+                }});
+
+                document.addEventListener('mousemove', function(e) {{
+                    if (isDragging) {{
+                        floatingWindow.style.left = (e.clientX - dragOffsetX) + 'px';
+                        floatingWindow.style.top = (e.clientY - dragOffsetY) + 'px';
+                        floatingWindow.style.right = 'auto';
+                    }}
+                }});
+
+                document.addEventListener('mouseup', function() {{
+                    isDragging = false;
+                }});
+
+                // Ensure the window stays within the viewport
+                function adjustPosition() {{
+                    var rect = floatingWindow.getBoundingClientRect();
+                    if (rect.right > window.innerWidth) {{
+                        floatingWindow.style.left = (window.innerWidth - rect.width) + 'px';
+                    }}
+                    if (rect.bottom > window.innerHeight) {{
+                        floatingWindow.style.top = (window.innerHeight - rect.height) + 'px';
+                    }}
+                    if (rect.left < 0) {{
+                        floatingWindow.style.left = '0px';
+                    }}
+                    if (rect.top < 0) {{
+                        floatingWindow.style.top = '0px';
+                    }}
+                }}
+
+                // Add event listener for resize
+                window.addEventListener('resize', adjustPosition);
+
+                // Periodically check and adjust position (for when the window is resized by the user)
+                setInterval(adjustPosition, 100);
+
+                // Apply additional styling to the existing content
+                var table = floatingWindow.querySelector('table');
+                if (table) {{
+                    table.className = 'print-history-table';
+                    var statusCells = table.querySelectorAll('td:last-child');
+                    statusCells.forEach(cell => {{
+                        if (cell.textContent.trim().toLowerCase() === 'printed') {{
+                            cell.className = 'status-printed';
+                        }} else if (cell.textContent.trim().toLowerCase().includes('refund')) {{
+                            cell.className = 'status-refund';
+                        }}
+                    }});
+                }}
+
+                // Add click-to-copy functionality
+                var extroUidSpan = floatingWindow.querySelector('.extro-uid');
+                var tooltip = floatingWindow.querySelector('.tooltip');
+
+                extroUidSpan.addEventListener('click', function() {{
+                    var textArea = document.createElement("textarea");
+                    textArea.value = this.textContent;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("Copy");
+                    textArea.remove();
+
+                    // Show tooltip
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (this.offsetLeft + this.offsetWidth / 2 - tooltip.offsetWidth / 2) + 'px';
+                    tooltip.style.top = (this.offsetTop + this.offsetHeight + 5) + 'px';
+
+                    // Hide tooltip after 2 seconds
+                    setTimeout(function() {{
+                        tooltip.style.display = 'none';
+                    }}, 2000);
+                }});
+                """
+
+                self.driver.execute_script(create_floating_window_script)
+
+                print(f"Created floating window with print history for user: {user_id}")
+
+                # Close the FollowMe Print and IGA tabs
+                for _ in range(2):
+                    self.driver.switch_to.window(self.driver.window_handles[-1])
+                    self.driver.close()
+
+                # Switch back to the original ServiceNow tab
+                self.driver.switch_to.window(self.driver.window_handles[0])
+
+            except Exception as e:
+                print(f"Error processing user: {user_id}")
+                print(str(e))
+
+        print(f"Finished processing ticket: {ticket_number}")
 
     except Exception as e:
         print(f"Error processing ticket {ticket_number}: {str(e)}")
         QMessageBox.warning(self, "Error", f"An error occurred while processing ticket {ticket_number}: {str(e)}")
-
-    print(f"Finished processing ticket {ticket_number}.")
 
